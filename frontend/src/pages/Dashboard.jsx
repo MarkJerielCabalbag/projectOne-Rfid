@@ -6,13 +6,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBuilding,
   faEnvelope,
-  faSearch,
-  faTools,
   faUser,
   faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import Modal from "../components/Modal";
-import { faUber } from "@fortawesome/free-brands-svg-icons";
+
 import Banner from "../components/Banner";
 function Dashboard() {
   const [showModal, setShowModal] = useState(false);
