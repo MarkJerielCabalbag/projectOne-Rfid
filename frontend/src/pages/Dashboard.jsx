@@ -10,7 +10,6 @@ import {
   faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import Modal from "../components/Modal";
-
 import Banner from "../components/Banner";
 function Dashboard() {
   const [showModal, setShowModal] = useState(false);
