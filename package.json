@@ -5,7 +5,12 @@
   "main": "index.js",
   "scripts": {
     "server": "nodemon backend/server.js",
-    "build": "vite build"
+    "build": "vite build",
+    "dev": "vite",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
   },
   "author": "mark jeriel g. cabalbag",
   "license": "ISC",
