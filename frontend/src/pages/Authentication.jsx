@@ -11,8 +11,8 @@ function Authentication() {
 
   return (
     <>
-      <div className="container-sm vh-100 d-flex justify-content-center align-items-center">
-        <div className="bg-white p-5 rounded text-black d-flex align-items-center gap-5">
+      <div className="container-sm container-md container-lg d-flex justify-content-center align-items-center vh-100">
+        <div className="container-fluid d-sm-flex flex-sm-column-reverse align-items-sm-center justify-content-sm-center d-md-flex flex-md-row align-items-md-center justify-content-md-center gap-3">
           <Form
             className={"text-center"}
             formContent={
@@ -48,7 +48,7 @@ function Authentication() {
               </>
             }
           />
-          <div className="w-75 d-flex flex-column align-items-center text-center">
+          <div className="w-100 d-flex flex-column align-items-center text-center">
             <img src={logo} className="img-fluid" alt="Logo" />
             <h1>Radio Frequency Identification</h1>
             <p>RFID Solutions for Classroom Security and Access Control!</p>
