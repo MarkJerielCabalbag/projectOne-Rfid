@@ -4,13 +4,7 @@
   "description": "finals project made with mern stack",
   "main": "index.js",
   "scripts": {
-    "server": "nodemon backend/server.js",
-    "build": "vite build",
-    "dev": "vite",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "server": "nodemon backend/server.js"
   },
   "author": "mark jeriel g. cabalbag",
   "license": "ISC",
