@@ -168,13 +168,13 @@ export const useLoginAccount = ({ onSuccess, onError }) => {
 
 //@desc   fetch GET
 //@api    getCard function
-export const useFetchCard = ({ onSuccess, onError }) => {
+export const useFetchCard = ({ onSuccess, onError, refetchInterval }) => {
   return useQuery({
     queryKey: ["card"],
     queryFn: getCard,
     onSuccess,
     onError,
-    // refetchInterval: 2000,
+    refetchInterval,
   });
 };
 

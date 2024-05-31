@@ -64,7 +64,7 @@ function Footer() {
                   {<FontAwesomeIcon icon={faUser} />} Dran Leynard Gamoso
                 </div>
                 <div className="text-white link-underline link-underline-opacity-0">
-                  {<FontAwesomeIcon icon={faUser} />} Jared Ellaisos
+                  {<FontAwesomeIcon icon={faUser} />} Jared Ellasos
                 </div>
                 <div className="text-white link-underline link-underline-opacity-0">
                   {<FontAwesomeIcon icon={faUser} />} Ruvic Bacton

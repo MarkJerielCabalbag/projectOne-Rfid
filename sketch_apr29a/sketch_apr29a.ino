@@ -1,13 +1,9 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include <SPI.h>
 #include <MFRC522.h>
 #include <Servo.h>
-#include <WiFi.h>
-#include <WiFiMulti.h>
-#include <HTTPClient.h>
-
-#define USE_SERIAL Serial
-
-WiFiMulti wifiMulti;
 
 #define SS_PIN 5     // SPI Slave Select Pin
 #define RST_PIN 0    // Reset Pin
@@ -18,81 +14,48 @@ Servo servo;
 
 bool doorLocked = true; // Variable to track door lock state
 String lastAuthorizedTag = ""; // Variable to store the last authorized tag
+String lastAuthorizedUser = ""; // Variable to store the last authorized user
+
+// Wi-Fi credentials
+const char ssid[] = "HUAWEI-2.4G-u5Ve";
+const char password[] = "RqqDP8sf";
+
+// Server details
+const char serverAddress[] = "192.168.100.46"; // Your server's IP address
+const int serverPort = 8000;
 
 // Assign a unique ID to this scanner
 const char* scannerID = "LAB-A";
 
-// Define a struct to hold UID and user name mappings
-struct User {
-  String uid;
-  String name;
-};
-
-// Initialize an array of authorized users
-User authorizedUsers[] = {
-  {"92979DD3", "OJAS"},
-  {"9192271D", "VENTURA"},
-  {"A93D9D6D", "PILOTIN"},
-  {"71038508", "GENITA"},
-  {"F9327614", "MasterKey"}
-};
+// Master key tag ID
+const String masterKey = "F9327614";
 
 void setup() {
- 
+  Serial.begin(115200);
   SPI.begin();
   rfid.PCD_Init();
   servo.attach(SERVO_PIN);
   lockDoor(); // Ensure the door starts in a locked state
-  Serial.println("Scanner ID: " + String(scannerID)); // Print scanner ID at startup
 
-  USE_SERIAL.begin(115200);
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
 
-  USE_SERIAL.println();
-  USE_SERIAL.println();
-  USE_SERIAL.println();
-
-  for(uint8_t t = 4; t > 0; t--) {
-    USE_SERIAL.printf("[SETUP] WAIT %d...\n", t);
-    USE_SERIAL.flush();
-    delay(1000);
+  // Wait until connected to Wi-Fi
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
   }
 
-  wifiMulti.addAP("Megabot", "RqqDP8sf");
+  // Print connected message and IP address
+  Serial.println("\nConnected to WiFi network");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  Serial.println("Scanner ID: " + String(scannerID)); // Print scanner ID at startup
 }
 
 void loop() {
-  if (wifiMulti.run() == WL_CONNECTED) {
-    HTTPClient http;
-
-    USE_SERIAL.print("[HTTP] begin...\n");
-    // configure target server and url
-    http.begin("http://example.com/index.html"); //HTTP
-
-    USE_SERIAL.print("[HTTP] GET...\n");
-    // start connection and send HTTP header
-    int httpCode = http.GET();
-
-    // httpCode will be negative on error
-    if (httpCode > 0) {
-      // HTTP header has been send and Server response header has been handled
-      USE_SERIAL.printf("[HTTP] GET... code: %d\n", httpCode);
-
-      // file found at server
-      if (httpCode == HTTP_CODE_OK) {
-        String payload = http.getString();
-        USE_SERIAL.println(payload);
-      }
-    } else {
-      USE_SERIAL.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-    }
-
-    http.end();
-  } else {
-    USE_SERIAL.println("[WiFi] Not connected!");
-  }
-
-
-
   if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
     String tagID = "";
     for (byte i = 0; i < rfid.uid.size; i++) {
@@ -103,46 +66,60 @@ void loop() {
     Serial.println("RFID Tag: " + tagID);
     Serial.println("Scanner ID: " + String(scannerID)); // Print scanner ID with tag
 
-    String userName = getUserName(tagID);
+    DynamicJsonDocument doc = fetchDataFromServer();
 
-    if (isAuthorized(tagID)) {
-      if (doorLocked) {
-        unlockDoor();
-        lastAuthorizedTag = tagID;
-        Serial.println("User: " + userName); // Print user name
+    if (!doc.isNull()) {
+      String userName = getUserName(tagID, doc);
+
+      if (isAuthorized(tagID, doc)) {
+        handleAccess(tagID, userName);
       } else {
-        // Check if the same tag is trying to close the door or if it's the master key
-        if (tagID == lastAuthorizedTag || tagID == "F9327614") {
-          lockDoor();
-          lastAuthorizedTag = ""; // Reset last authorized tag
-          Serial.println("User: " + userName); // Print user name
-        } else {
-          Serial.println("You are not authorized to close the door.");
-        }
+        Serial.println("Access denied.");
       }
-    } else {
-      Serial.println("Access denied.");
     }
 
     delay(1000); // Delay to avoid reading the same card multiple times
   }
 }
 
-bool isAuthorized(String tagID) {
-  // Check if the tagID is in the list of authorized users
-  for (User user : authorizedUsers) {
-    if (tagID == user.uid) {
+void handleAccess(String tagID, String userName) {
+  if (doorLocked) {
+    unlockDoor();
+    lastAuthorizedTag = tagID;
+    lastAuthorizedUser = userName;
+    Serial.println("User: " + userName); // Print user name
+    // Unlocking the door sets card status to Online
+    updateCardStatus(tagID, userName, false); // Pass false for doorLocked
+  } else {
+    // Check if the same tag is trying to close the door or if it's the master key
+    if (tagID == lastAuthorizedTag || tagID == masterKey) {
+      lockDoor();
+      lastAuthorizedTag = ""; // Reset last authorized tag
+      lastAuthorizedUser = ""; // Reset last authorized user
+      Serial.println("User: " + userName); // Print user name
+      // Locking the door sets card status to Offline
+      updateCardStatus(tagID, userName, true); // Pass true for doorLocked
+    } else {
+      Serial.println("You are not authorized to close the door.");
+    }
+  }
+}
+
+bool isAuthorized(String tagID, DynamicJsonDocument& doc) {
+  // Check if the tagID is in the list of authorized users from the fetched data
+  for (JsonObject card : doc.as<JsonArray>()) {
+    if (card["card_id"] == tagID) {
       return true;
     }
   }
   return false;
 }
 
-String getUserName(String tagID) {
-  // Retrieve the user name based on the tagID
-  for (User user : authorizedUsers) {
-    if (tagID == user.uid) {
-      return user.name;
+String getUserName(String tagID, DynamicJsonDocument& doc) {
+  // Retrieve the user name based on the tagID from the fetched data
+  for (JsonObject card : doc.as<JsonArray>()) {
+    if (card["card_id"] == tagID) {
+      return card["card_user"].as<String>();
     }
   }
   return "Unknown";
@@ -158,4 +135,82 @@ void lockDoor() {
   servo.write(0); // Rotate servo to locked position
   doorLocked = true;
   Serial.println("Door locked.");
+}
+
+DynamicJsonDocument fetchDataFromServer() {
+  DynamicJsonDocument doc(2048); // Increased the size of the document buffer
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient client;
+    String url = "https://rest-api-jiei.onrender.com/rfid-ispsc/card/getCard";
+    Serial.println("Requesting URL: " + url);
+    client.begin(url);
+
+    int httpCode = client.GET();
+    Serial.print("HTTP GET Request: ");
+    Serial.println(httpCode);
+
+    if (httpCode == HTTP_CODE_OK) {
+      String payload = client.getString();
+      Serial.println("\nStatus code: " + String(httpCode));
+      Serial.println("Payload: " + payload);
+
+      // Parse the JSON payload
+      DeserializationError error = deserializeJson(doc, payload);
+      if (error) {
+        Serial.println("Failed to parse JSON payload");
+        doc.clear();
+      }
+    } else {
+      Serial.println("Error on HTTP request");
+      Serial.println("HTTP code: " + String(httpCode));
+      Serial.println("Error message: " + client.errorToString(httpCode));
+      doc.clear();
+    }
+
+    client.end();
+  } else {
+    Serial.println("Connection Lost");
+    doc.clear();
+  }
+
+  return doc;
+}
+
+void updateCardStatus(String cardID, String cardUser, bool doorLocked) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient client;
+    String url = "https://rest-api-jiei.onrender.com/rfid-ispsc/card/updateCardArduino/" + cardID;
+    client.begin(url);
+    client.addHeader("Content-Type", "application/json");
+
+    // Determine the card status based on the door lock status
+    String cardStatus = doorLocked ? "Offline" : "Online";
+
+    DynamicJsonDocument doc(1024);
+    doc["card_id"] = cardID;
+    doc["card_user"] = cardUser;
+    doc["card_status"] = cardStatus; // Set the card status
+
+    String requestBody;
+    serializeJson(doc, requestBody);
+
+    int httpCode = client.PUT(requestBody);
+    Serial.print("HTTP PUT Request: ");
+    Serial.println(httpCode);
+
+    if (httpCode == HTTP_CODE_OK) {
+      String response = client.getString();
+      Serial.println("\nStatus code: " + String(httpCode));
+      Serial.println("Response: " + response);
+    } else {
+      Serial.println("Error on HTTP request");
+      Serial.println("HTTP code: " + String(httpCode));
+      Serial.println("Error message: " + client.errorToString(httpCode));
+    }
+
+    client.end();
+  } else {
+    Serial.println("Connection Lost");
+  }
 }
